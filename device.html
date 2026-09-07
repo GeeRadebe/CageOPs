@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>CageOps — Device</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  :root{
+    --paper:#14181a; --paper-dark:#1c2224; --ink:#c9d6d6; --ink-soft:#7c9494;
+    --rule:#313c3c; --accent:#2fbf6e; --accent-dark:#1f8a4d;
+    --danger:#e0483c; --warn:#e0a030;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{ height:100%; }
+  body{
+    margin:0; font-family:'Consolas','Courier New',Courier,monospace; background:var(--paper);
+    color:var(--ink); display:flex; flex-direction:column; min-height:100vh;
+  }
+  .top{
+    padding:14px 16px; border-bottom:1px solid var(--accent); text-align:center;
+  }
+  .top .name{ font-size:1.1rem; letter-spacing:2px; text-transform:uppercase; color:var(--accent); text-shadow:0 0 8px rgba(47,191,110,0.35); }
+  .top .usage{ font-size:0.8rem; color:var(--ink-soft); margin-top:4px; text-transform:uppercase; letter-spacing:1px; }
+  .top .repair{ position:absolute; top:14px; right:16px; font-size:0.65rem; color:var(--ink-soft); background:none; border:1px solid var(--rule); padding:4px 8px; }
+
+  .body{ flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:20px; text-align:center; }
+
+  .status-line{ font-size:0.7rem; color:var(--ink-soft); padding:8px 16px; text-align:center; }
+  .status-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
+  .status-dot.ok{ background:var(--accent); } .status-dot.bad{ background:var(--danger); }
+
+  input[type=text]{
+    width:100%; max-width:320px; padding:16px; font-size:1.3rem; text-align:center;
+    font-family:inherit; background:#0c0f10; border:1px solid var(--rule); color:var(--accent);
+    margin-bottom:16px; letter-spacing:1px;
+  }
+  input[type=text]:focus{ outline:1px solid var(--accent); box-shadow:0 0 10px rgba(47,191,110,0.4); }
+
+  .btn{
+    width:100%; max-width:320px; padding:18px; font-family:inherit; font-size:1.1rem;
+    text-transform:uppercase; letter-spacing:2px; border:1px solid var(--accent-dark);
+    background:var(--accent); color:#0c0f10; font-weight:bold; cursor:pointer;
+  }
+  .btn:active{ background:var(--accent-dark); }
+  .btn.logout{ background:var(--danger); border-color:#a5352c; }
+  .btn.logout:active{ background:#a5352c; }
+  .btn.secondary{ background:transparent; color:var(--ink); border:1px solid var(--ink-soft); }
+  .btn:disabled{ opacity:0.4; }
+
+  .session-card{ margin-bottom:20px; }
+  .session-card .who{ font-size:1.4rem; color:var(--ink); margin-bottom:4px; }
+  .session-card .since{ font-size:0.8rem; color:var(--ink-soft); }
+
+  .setup{ max-width:360px; width:100%; text-align:left; }
+  .setup h2{ text-align:center; color:var(--accent); text-transform:uppercase; letter-spacing:1px; font-size:1rem; margin-bottom:16px; }
+  .setup label{ display:block; font-size:0.68rem; text-transform:uppercase; color:var(--ink-soft); margin:12px 0 4px; }
+  .setup select, .setup input{
+    width:100%; padding:10px; font-family:inherit; background:#0c0f10; border:1px solid var(--rule); color:var(--ink); font-size:0.95rem;
+  }
+  .setup .radio-row{ display:flex; gap:16px; margin-top:6px; }
+  .setup .radio-row label{ display:flex; align-items:center; gap:6px; font-size:0.85rem; text-transform:none; margin:0; }
+  .tabs{ display:flex; gap:8px; margin-bottom:14px; }
+  .tabs button{ flex:1; padding:8px; font-family:inherit; font-size:0.72rem; text-transform:uppercase; background:var(--paper-dark); color:var(--ink-soft); border:1px solid var(--rule); cursor:pointer; }
+  .tabs button.active{ background:var(--accent); color:#0c0f10; border-color:var(--accent-dark); font-weight:bold; }
+  .hidden{ display:none; }
+
+  footer{ padding:10px; text-align:center; font-size:0.65rem; color:var(--ink-soft); border-top:1px solid var(--rule); }
+</style>
+</head>
+<body>
+
+  <div class="top" style="position:relative;">
+    <button class="repair" id="repairBtn">Re-pair</button>
+    <div class="name" id="deviceName">CAGEOPS</div>
+    <div class="usage" id="deviceUsage">Not paired to a scanner yet</div>
+  </div>
+
+  <div class="status-line"><span class="status-dot" id="statusDot"></span><span id="statusText">Connecting…</span></div>
+
+  <div class="body" id="body">
+    <!-- content injected by script: pairing screen, login screen, or session screen -->
+  </div>
+
+  <footer>CageOps device mode — this unit stays logged into whichever operator is currently using it</footer>
+
+<script>
+(function(){
+  // ── CONFIGURE THIS: same Web App URL as index.html ──
+  const WEBAPP_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+  // ─────────────────────────────────────────────────────
+  const DEVICE_KEY = 'cageops_device_v1';
+
+  const bodyEl = document.getElementById('body');
+  const deviceNameEl = document.getElementById('deviceName');
+  const deviceUsageEl = document.getElementById('deviceUsage');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const configured = WEBAPP_URL.indexOf('PASTE_') === -1;
+
+  let scanners = [];
+  let users = [];
+  let entries = [];
+  let device = loadDevice(); // {code, label} or null
+
+  function loadDevice(){
+    try{ return JSON.parse(localStorage.getItem(DEVICE_KEY)); }catch(e){ return null; }
+  }
+  function saveDevice(d){ localStorage.setItem(DEVICE_KEY, JSON.stringify(d)); device = d; }
+  function clearDevice(){ localStorage.removeItem(DEVICE_KEY); device = null; }
+
+  function usageLabel(v){ return v === 'jnx' ? 'Scan to JNX' : 'Bagging to Dispatch'; }
+  function setStatus(ok, text){ statusDot.className = 'status-dot ' + (ok?'ok':'bad'); statusText.textContent = text; }
+  function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str||''; return d.innerHTML; }
+  function fmtTime(iso){ if(!iso) return ''; return new Date(iso).toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}); }
+
+  async function api(action, method, body){
+    if(method === 'GET'){
+      const res = await fetch(WEBAPP_URL + '?action=' + action);
+      return res.json();
+    }
+    const res = await fetch(WEBAPP_URL, { method:'POST', body: JSON.stringify(Object.assign({action}, body||{})) });
+    return res.json();
+  }
+
+  async function refresh(){
+    if(!configured){ setStatus(false, 'Backend not configured'); return; }
+    try{
+      const [s, u, e] = await Promise.all([api('scanners','GET'), api('users','GET'), api('list','GET')]);
+      scanners = s.scanners || [];
+      users = u.users || [];
+      entries = e.entries || [];
+      setStatus(true, 'Synced');
+      render();
+    }catch(err){ setStatus(false, 'Sync failed'); }
+  }
+
+  function currentSession(){
+    if(!device) return null;
+    return entries.find(en => en.scannerId === device.label && !en.timeOut) || null;
+  }
+
+  function render(){
+    if(!device){
+      deviceNameEl.textContent = 'CAGEOPS';
+      deviceUsageEl.textContent = 'Not paired to a scanner yet';
+      renderPairing();
+      return;
+    }
+    deviceNameEl.textContent = device.label;
+    deviceUsageEl.textContent = 'Paired';
+
+    const session = currentSession();
+    if(session){
+      renderSession(session);
+    } else {
+      renderLogin();
+    }
+  }
+
+  // ── PAIRING (one-time per physical device) ──
+  function renderPairing(){
+    const existingOptions = scanners.map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.label)}</option>`).join('');
+    bodyEl.innerHTML = `
+      <div class="setup">
+        <h2>Pair this device</h2>
+        <div class="tabs">
+          <button id="tabExisting" class="active">Existing scanner</button>
+          <button id="tabNew">Register new</button>
+        </div>
+        <div id="paneExisting">
+          <label>Choose the scanner this device is</label>
+          <select id="existingSelect">
+            <option value="">Select…</option>
+            ${existingOptions}
+          </select>
+          <button class="btn" id="pairExistingBtn" style="margin-top:16px;">Pair</button>
+        </div>
+        <div id="paneNew" class="hidden">
+          <label>Label</label>
+          <input type="text" id="newLabel" placeholder="e.g. Scanner 7">
+          <button class="btn" id="pairNewBtn" style="margin-top:16px;">Register & pair</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('tabExisting').addEventListener('click', () => switchTab('existing'));
+    document.getElementById('tabNew').addEventListener('click', () => switchTab('new'));
+    document.getElementById('pairExistingBtn').addEventListener('click', () => {
+      const code = document.getElementById('existingSelect').value;
+      const s = scanners.find(sc => sc.code === code);
+      if(!s){ alert('Pick a scanner.'); return; }
+      saveDevice(s);
+      render();
+    });
+    document.getElementById('pairNewBtn').addEventListener('click', async () => {
+      const label = document.getElementById('newLabel').value.trim();
+      if(!label){ alert('Enter a label.'); return; }
+      const code = 'DEVICE-' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+      try{
+        await api('registerScanner','POST',{code,label});
+        saveDevice({code,label});
+        await refresh();
+      }catch(e){ alert('Could not register — try again.'); }
+    });
+  }
+  function switchTab(which){
+    document.getElementById('tabExisting').classList.toggle('active', which==='existing');
+    document.getElementById('tabNew').classList.toggle('active', which==='new');
+    document.getElementById('paneExisting').classList.toggle('hidden', which!=='existing');
+    document.getElementById('paneNew').classList.toggle('hidden', which!=='new');
+  }
+
+  // ── LOGIN (nobody currently using this device) ──
+  function renderLogin(){
+    bodyEl.innerHTML = `
+      <input type="text" id="loginId" placeholder="Your TT# / ID" autofocus autocomplete="off">
+      <div class="radio-row" style="justify-content:center; margin-bottom:20px;">
+        <label><input type="radio" name="loginUsage" value="jnx" checked> Scan to JNX</label>
+        <label><input type="radio" name="loginUsage" value="bagging"> Bagging to Dispatch</label>
+      </div>
+      <button class="btn" id="loginBtn">Log in</button>
+    `;
+    const loginId = document.getElementById('loginId');
+    document.getElementById('loginBtn').addEventListener('click', () => doLogin(loginId.value.trim()));
+    loginId.addEventListener('keydown', e => { if(e.key === 'Enter') doLogin(loginId.value.trim()); });
+  }
+
+  async function doLogin(id){
+    if(!id) return;
+    const usage = document.querySelector('input[name="loginUsage"]:checked').value;
+    let user = users.find(u => u.ttNumber.toLowerCase() === id.toLowerCase());
+    if(!user){
+      const name = prompt('New user — enter full name for ' + id + ':');
+      if(!name){ return; }
+      try{
+        await api('registerUser','POST',{ttNumber:id, name:name.trim()});
+        user = {ttNumber:id, name:name.trim()};
+      }catch(e){ alert('Could not register user.'); return; }
+    }
+    try{
+      const res = await api('checkout','POST',{code: device.code, operatorId: user.ttNumber, usage});
+      if(res.ok === false){ alert(res.error || 'Login failed.'); return; }
+      await refresh();
+    }catch(e){ alert('Could not log in — try again.'); }
+  }
+
+  // ── SESSION (someone is currently logged into this device) ──
+  function renderSession(session){
+    bodyEl.innerHTML = `
+      <div class="session-card">
+        <div class="who">${escapeHtml(session.operatorName)}</div>
+        <div class="since">${usageLabel(session.usage)} · Logged in since ${fmtTime(session.timeIn)} · ${escapeHtml(session.operatorId)}</div>
+      </div>
+      <button class="btn logout" id="logoutBtn">Log out</button>
+    `;
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      if(!confirm('Log out ' + session.operatorName + '?')) return;
+      try{ await api('checkin','POST',{id: session.id}); await refresh(); }
+      catch(e){ alert('Could not log out — try again.'); }
+    });
+  }
+
+  document.getElementById('repairBtn').addEventListener('click', () => {
+    if(confirm('Re-pair this device to a different scanner? Only do this if the device itself changed.')){
+      clearDevice();
+      render();
+    }
+  });
+
+  refresh();
+  setInterval(refresh, 6000);
+})();
+</script>
+</body>
+</html>

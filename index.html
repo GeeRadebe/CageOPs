@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CageOps — Scanner Register</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{
+    --paper:#14181a; --paper-dark:#1c2224; --ink:#c9d6d6; --ink-soft:#7c9494;
+    --rule:#313c3c; --accent:#2fbf6e; --accent-dark:#1f8a4d; --stamp:#2fbf6e;
+    --danger:#e0483c; --warn:#e0a030; --shadow: rgba(0,0,0,0.5);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Consolas','Courier New',Courier,monospace; background:var(--paper);
+    background-image:
+      linear-gradient(rgba(47,191,110,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(47,191,110,0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+    color:var(--ink); padding:24px 16px 60px;
+  }
+  .sheet{ max-width:1020px; margin:0 auto; background:var(--paper-dark); border:1px solid var(--rule); box-shadow:0 0 24px var(--shadow), inset 0 0 60px rgba(47,191,110,0.02); padding:28px 28px 20px; }
+  header{ display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--accent); padding-bottom:14px; margin-bottom:18px; flex-wrap:wrap; gap:12px; }
+  header h1{ margin:0; font-size:1.4rem; letter-spacing:2px; text-transform:uppercase; color:var(--accent); text-shadow:0 0 8px rgba(47,191,110,0.35); }
+  header .sub{ color:var(--ink-soft); font-size:0.8rem; margin-top:4px; }
+  .meta{ text-align:right; font-size:0.78rem; color:var(--ink-soft); line-height:1.5; }
+  .meta strong{color:var(--ink);}
+  .meta a{ color:var(--accent-dark); }
+  .status-bar{ display:flex; justify-content:space-between; align-items:center; font-size:0.72rem; color:var(--ink-soft); margin-bottom:14px; flex-wrap:wrap; gap:6px; }
+  .status-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .status-dot.ok{ background:var(--stamp); } .status-dot.bad{ background:var(--danger); }
+
+  .scan-box{
+    display:flex; gap:10px; align-items:center; margin-bottom:16px; padding:14px;
+    background:#0c0f10; border:1px solid var(--accent); box-shadow:0 0 12px rgba(47,191,110,0.15) inset;
+  }
+  .scan-box input{
+    flex:1; padding:10px 12px; font-family:inherit; font-size:1rem;
+    background:#0c0f10; border:1px solid var(--rule); color:var(--accent);
+  }
+  .scan-box input:focus{ outline:1px solid var(--accent); box-shadow:0 0 8px rgba(47,191,110,0.4); }
+  .scan-hint{ font-size:0.7rem; color:var(--ink-soft); margin-top:6px; }
+
+  form.entry{
+    display:grid; grid-template-columns: 0.9fr 0.9fr 1fr 0.9fr auto auto; gap:10px; align-items:end;
+    margin-bottom:20px; padding:14px; background:var(--paper); border:1px solid var(--rule);
+  }
+  form.entry label{ display:block; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-soft); margin-bottom:4px; }
+  form.entry input, form.entry select{
+    width:100%; padding:7px 8px; font-family:inherit; font-size:0.85rem;
+    background:#0c0f10; border:1px solid var(--rule); color:var(--ink);
+  }
+  form.entry input:focus, form.entry select:focus{ outline:1px solid var(--accent); }
+  .btn{ padding:9px 14px; font-family:inherit; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; border:1px solid var(--accent-dark); background:var(--accent); color:#0c0f10; font-weight:bold; cursor:pointer; white-space:nowrap; }
+  .btn:hover{ background:var(--accent-dark); color:var(--ink); }
+  .btn.secondary{ background:transparent; color:var(--ink); border:1px solid var(--ink-soft); }
+  .btn.secondary:hover{ background:var(--paper-dark); border-color:var(--ink); }
+  .btn.danger{ background:transparent; color:var(--danger); border:1px solid var(--danger); padding:4px 8px; font-size:0.72rem; }
+  .btn.danger:hover{ background:rgba(224,72,60,0.12); }
+  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  .toolbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:10px; }
+  .toolbar .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .counts{ font-size:0.78rem; color:var(--ink-soft); }
+  .section-label{ font-size:0.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--accent); margin:18px 0 8px; border-bottom:1px solid var(--rule); padding-bottom:4px; display:flex; justify-content:space-between; align-items:center; }
+
+  table{ width:100%; border-collapse:collapse; font-size:0.85rem; }
+  thead th{ text-align:left; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.5px; color:var(--ink-soft); border-bottom:1px solid var(--accent); padding:8px 6px; }
+  tbody td{ padding:8px 6px; border-bottom:1px solid var(--rule); vertical-align:middle; }
+  tbody tr:hover{ background:rgba(47,191,110,0.05); }
+  .tag{ display:inline-block; padding:2px 8px; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.3px; border-radius:2px; }
+  .tag.jnx{ background:rgba(47,191,110,0.12); color:var(--accent); border:1px solid var(--accent); }
+  .tag.bagging{ background:rgba(124,148,148,0.12); color:var(--ink-soft); border:1px solid var(--ink-soft); }
+  .tag.inuse{ background:rgba(224,160,48,0.15); color:var(--warn); border:1px solid var(--warn); }
+  .tag.ok{ background:rgba(47,191,110,0.12); color:var(--stamp); border:1px solid var(--stamp); }
+  .empty{ text-align:center; padding:24px 10px; color:var(--ink-soft); font-style:italic; }
+  footer{ margin-top:18px; font-size:0.72rem; color:var(--ink-soft); text-align:center; border-top:1px solid var(--rule); padding-top:10px; }
+
+  /* roll call */
+  .rollcall-panel{ background:var(--paper); border:1px solid var(--accent); padding:14px; margin-bottom:20px; }
+  .rollcall-panel.hidden{ display:none; }
+  .rc-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; margin:10px 0; }
+  .rc-chip{ padding:8px; text-align:center; font-size:0.78rem; border:1px solid var(--rule); background:#0c0f10; }
+  .rc-chip.scanned{ background:rgba(47,191,110,0.15); border-color:var(--accent); color:var(--accent); }
+
+  /* camera modal */
+  .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; align-items:center; justify-content:center; z-index:100; }
+  .modal-backdrop.hidden{ display:none; }
+  .modal{ background:var(--paper-dark); border:1px solid var(--accent); box-shadow:0 0 24px rgba(47,191,110,0.2); padding:16px; max-width:420px; width:92%; }
+  .modal h3{ margin:0 0 10px; font-size:0.95rem; text-transform:uppercase; letter-spacing:1px; color:var(--accent); }
+  #cameraReader{ width:100%; }
+  .modal-close{ margin-top:10px; width:100%; }
+
+  @media (max-width:760px){
+    form.entry{ grid-template-columns:1fr 1fr; }
+    .meta{ text-align:left; }
+    table, thead, tbody, tr, td, th{ display:block; }
+    thead{ display:none; }
+    tbody tr{ border:1px solid var(--rule); margin-bottom:10px; padding:6px; }
+    tbody td{ border:none; padding:4px 6px; display:flex; justify-content:space-between; }
+    tbody td::before{ content:attr(data-label); font-weight:bold; color:var(--ink-soft); font-size:0.68rem; text-transform:uppercase; }
+  }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <header>
+      <div>
+        <h1>CageOps</h1>
+        <div class="sub">Cage → JNX handover · Bagging → Dispatch — scan to identify</div>
+      </div>
+      <div class="meta">
+        <div><strong>Facility:</strong> Skynet Elandsfontein</div>
+        <div><strong>Date:</strong> <span id="today"></span></div>
+        <div><a href="labels.html" target="_blank">Print scanner labels →</a></div>
+      </div>
+    </header>
+
+    <div class="status-bar">
+      <div><span class="status-dot" id="statusDot"></span><span id="statusText">Connecting…</span></div>
+      <div id="lastSync">—</div>
+    </div>
+
+    <!-- SCAN BOX: barcode wedge scanners type into this and hit Enter; camera button for phone/tablet cameras -->
+    <div class="scan-box">
+      <input type="text" id="scanInput" placeholder="Scan the barcode/QR on the scanner…" autocomplete="off" autofocus>
+      <button class="btn secondary" id="cameraBtn">📷 Camera scan</button>
+    </div>
+    <div class="scan-hint">Scan a checked-in unit to check it out. Scan a checked-out unit to check it in. A new code prompts a one-time label. Pick usage (JNX or bagging) each time you check out — these units aren't dedicated to one stage.</div>
+
+    <!-- Manual checkout form, filled automatically once a code resolves to a known scanner.
+         Usage is NOT chosen here — it's fixed per physical unit and shown read-only. -->
+    <form class="entry" id="entryForm" style="margin-top:16px;">
+      <div>
+        <label>Scanner</label>
+        <input type="text" id="scannerLabel" readonly placeholder="Scan a code above">
+      </div>
+      <div>
+        <label for="operator">Operator TT# / ID</label>
+        <input type="text" id="operator" placeholder="e.g. TT12034" required>
+      </div>
+      <div>
+        <label>Operator name (verified)</label>
+        <input type="text" id="operatorNameDisplay" readonly placeholder="—">
+      </div>
+      <div>
+        <label>Usage</label>
+        <select id="usage" required>
+          <option value="jnx">Scan to JNX</option>
+          <option value="bagging">Bagging to Dispatch</option>
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="btn" id="checkoutBtn" disabled>Check out</button>
+      </div>
+      <div>
+        <button type="button" class="btn secondary" id="cancelScanBtn">Clear</button>
+      </div>
+    </form>
+
+    <!-- SHIFT ROLL CALL -->
+    <div class="section-label">
+      <span>Shift roll call</span>
+      <span>
+        <button class="btn secondary" id="startShiftBtn" style="font-size:0.7rem;padding:5px 10px;">Start of shift</button>
+        <button class="btn secondary" id="endShiftBtn" style="font-size:0.7rem;padding:5px 10px;">End of shift</button>
+      </span>
+    </div>
+    <div class="rollcall-panel hidden" id="rollcallPanel">
+      <div id="rcTitle" style="font-weight:bold;"></div>
+      <div style="margin-top:8px;">
+        <label style="font-size:0.7rem; text-transform:uppercase; color:var(--ink-soft);">Doing the roll call (TT# / ID)</label>
+        <input type="text" id="rcOperator" style="width:100%; padding:7px 8px; font-family:inherit; background:var(--paper); border:1px solid var(--rule); margin-top:4px;">
+        <div id="rcOperatorName" style="font-size:0.72rem; color:var(--accent); margin-top:4px; min-height:1em;"></div>
+      </div>
+      <div class="rc-grid" id="rcGrid"></div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="rcFinishBtn">Finish roll call</button>
+        <button class="btn secondary" id="rcCancelBtn">Cancel</button>
+      </div>
+    </div>
+
+    <div class="section-label">Currently in use</div>
+    <table>
+      <thead><tr><th>Scanner</th><th>Operator</th><th>Time In</th><th>Usage</th><th></th></tr></thead>
+      <tbody id="activeRows"></tbody>
+    </table>
+    <div class="empty" id="activeEmpty">All scanners are checked in.</div>
+
+    <div class="section-label">Today's log</div>
+    <div class="toolbar">
+      <div class="counts" id="counts">0 entries</div>
+      <div class="actions">
+        <button class="btn secondary" id="exportCsv">Export CSV</button>
+        <button class="btn secondary" id="refreshBtn">Refresh</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Scanner</th><th>Operator</th><th>Time In</th><th>Time Out</th><th>Usage</th><th></th></tr></thead>
+      <tbody id="logRows"></tbody>
+    </table>
+    <div class="empty" id="logEmpty">No entries logged yet today.</div>
+
+    <footer>CageOps — scanner register · synced across devices via shared backend</footer>
+  </div>
+
+  <!-- Camera scan modal -->
+  <div class="modal-backdrop hidden" id="cameraModal">
+    <div class="modal">
+      <h3>Camera scan</h3>
+      <div id="cameraReader"></div>
+      <button class="btn secondary modal-close" id="closeCameraBtn">Cancel</button>
+    </div>
+  </div>
+
+  <!-- New scanner registration modal -->
+  <div class="modal-backdrop hidden" id="registerModal">
+    <div class="modal">
+      <h3>New scanner detected</h3>
+      <div style="font-size:0.8rem; color:var(--ink-soft); margin-bottom:10px;">Code: <span id="registerCode" style="color:var(--ink); font-weight:bold;"></span></div>
+      <label style="font-size:0.68rem; text-transform:uppercase; color:var(--ink-soft);">Label</label>
+      <input type="text" id="registerLabel" placeholder="e.g. Scanner 1" style="width:100%; padding:8px; font-family:inherit; background:var(--paper); border:1px solid var(--rule); margin:4px 0 14px;">
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="registerSaveBtn" style="flex:1;">Save & continue</button>
+        <button class="btn secondary" id="registerCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New user registration modal — links a TT#/ID to a name, once -->
+  <div class="modal-backdrop hidden" id="userModal">
+    <div class="modal">
+      <h3>New user</h3>
+      <div style="font-size:0.8rem; color:var(--ink-soft); margin-bottom:10px;">TT# / ID: <span id="userModalId" style="color:var(--ink); font-weight:bold;"></span></div>
+      <label style="font-size:0.68rem; text-transform:uppercase; color:var(--ink-soft);">Full name</label>
+      <input type="text" id="userModalName" placeholder="e.g. Tefo Radebe" style="width:100%; padding:8px; font-family:inherit; background:var(--paper); border:1px solid var(--rule); margin:4px 0 14px;">
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="userSaveBtn" style="flex:1;">Save & continue</button>
+        <button class="btn secondary" id="userCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // ── CONFIGURE THIS: paste your deployed Apps Script Web App URL here ──
+  const WEBAPP_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+  // ────────────────────────────────────────────────────────────────────
+
+  const activeRows = document.getElementById('activeRows');
+  const activeEmpty = document.getElementById('activeEmpty');
+  const logRows = document.getElementById('logRows');
+  const logEmpty = document.getElementById('logEmpty');
+  const countsEl = document.getElementById('counts');
+  const form = document.getElementById('entryForm');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const lastSync = document.getElementById('lastSync');
+  const checkoutBtn = document.getElementById('checkoutBtn');
+  const scanInput = document.getElementById('scanInput');
+  const scannerLabelField = document.getElementById('scannerLabel');
+  const cameraBtn = document.getElementById('cameraBtn');
+  const cameraModal = document.getElementById('cameraModal');
+  const closeCameraBtn = document.getElementById('closeCameraBtn');
+
+  document.getElementById('today').textContent = new Date().toLocaleDateString('en-ZA', {year:'numeric', month:'short', day:'2-digit'});
+
+  let entries = [];
+  let scanners = [];      // {code, label, usage}
+  let users = [];         // {ttNumber, name}
+  let pendingCode = null; // code currently loaded into the checkout form
+  let pendingOperatorId = null;
+  let configured = WEBAPP_URL.indexOf('PASTE_') === -1;
+  let html5QrCode = null;
+
+  function usageLabel(v){ return v === 'jnx' ? 'Scan to JNX' : 'Bagging to Dispatch'; }
+  function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
+  function fmtTime(iso){ if(!iso) return ''; return new Date(iso).toLocaleTimeString('en-ZA', {hour:'2-digit', minute:'2-digit'}); }
+  function setStatus(ok, text){ statusDot.className = 'status-dot ' + (ok ? 'ok' : 'bad'); statusText.textContent = text; }
+  function scannerForCode(code){ return scanners.find(sc => sc.code === code) || null; }
+  function userForId(ttNumber){ return users.find(u => u.ttNumber.toLowerCase() === (ttNumber||'').toLowerCase()) || null; }
+
+  async function fetchAll(){
+    if(!configured){ setStatus(false, 'Backend not configured — set WEBAPP_URL in the script'); return; }
+    try{
+      const [entRes, scanRes, userRes] = await Promise.all([
+        fetch(WEBAPP_URL + '?action=list'),
+        fetch(WEBAPP_URL + '?action=scanners'),
+        fetch(WEBAPP_URL + '?action=users')
+      ]);
+      entries = (await entRes.json()).entries || [];
+      scanners = (await scanRes.json()).scanners || [];
+      users = (await userRes.json()).users || [];
+      setStatus(true, 'Synced');
+      lastSync.textContent = 'Last sync: ' + new Date().toLocaleTimeString('en-ZA');
+      render();
+    }catch(e){ setStatus(false, 'Sync failed — check connection'); }
+  }
+
+  function render(){
+    const active = entries.filter(e => !e.timeOut).sort((a,b) => a.scannerId.localeCompare(b.scannerId));
+    activeRows.innerHTML = '';
+    active.forEach(entry => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td data-label="Scanner"><span class="tag inuse">${escapeHtml(entry.scannerId)}</span></td>
+        <td data-label="Operator">${escapeHtml(entry.operatorName)} <span style="color:var(--ink-soft); font-size:0.75rem;">(${escapeHtml(entry.operatorId)})</span></td>
+        <td data-label="Time In">${fmtTime(entry.timeIn)}</td>
+        <td data-label="Usage"><span class="tag ${entry.usage}">${usageLabel(entry.usage)}</span></td>
+        <td data-label=""><button class="btn secondary" data-close="${entry.id}" style="font-size:0.72rem;padding:4px 8px;">Check in</button></td>`;
+      activeRows.appendChild(tr);
+    });
+    activeEmpty.style.display = active.length === 0 ? 'block' : 'none';
+
+    logRows.innerHTML = '';
+    const sorted = entries.slice().sort((a,b) => (b.timeIn||'').localeCompare(a.timeIn||''));
+    sorted.forEach(entry => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td data-label="Scanner">${escapeHtml(entry.scannerId)}</td>
+        <td data-label="Operator">${escapeHtml(entry.operatorName)} <span style="color:var(--ink-soft); font-size:0.75rem;">(${escapeHtml(entry.operatorId)})</span></td>
+        <td data-label="Time In">${fmtTime(entry.timeIn)}</td>
+        <td data-label="Time Out">${entry.timeOut ? fmtTime(entry.timeOut) : '<span class="tag inuse">open</span>'}</td>
+        <td data-label="Usage"><span class="tag ${entry.usage}">${usageLabel(entry.usage)}</span></td>
+        <td data-label=""><button class="btn danger" data-del="${entry.id}">Delete</button></td>`;
+      logRows.appendChild(tr);
+    });
+    logEmpty.style.display = entries.length === 0 ? 'block' : 'none';
+    countsEl.textContent = `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} today · ${active.length} of ${scanners.length || '?'} in use`;
+  }
+
+  function isCheckedOut(scannerLabel){
+    return entries.find(e => e.scannerId === scannerLabel && !e.timeOut);
+  }
+
+  // ── SCAN HANDLING ──
+  let codeAwaitingRegistration = null;
+
+  async function handleScannedCode(code){
+    code = (code || '').trim();
+    if(!code) return;
+
+    if(rollCallActive){
+      handleRollCallScan(code);
+      scanInput.value = '';
+      return;
+    }
+
+    const known = scannerForCode(code);
+    if(!known){
+      openRegisterModal(code);
+      scanInput.value = '';
+      return;
+    }
+
+    proceedWithScannedScanner(known);
+    scanInput.value = '';
+  }
+
+  function proceedWithScannedScanner(scanner){
+    const openEntry = isCheckedOut(scanner.label);
+    if(openEntry){
+      // scan-to-checkin
+      if(confirm(`${scanner.label} (${usageLabel(openEntry.usage)}) is checked out to ${openEntry.operatorName}. Check it in now?`)){
+        fetch(WEBAPP_URL, { method:'POST', body: JSON.stringify({ action:'checkin', id: openEntry.id }) }).then(fetchAll);
+      }
+      return;
+    }
+    // scan-to-checkout: populate the form; usage is chosen by the operator below
+    pendingCode = scanner.code;
+    scannerLabelField.value = scanner.label;
+    updateCheckoutEnabled();
+    document.getElementById('operator').focus();
+  }
+
+  // ── OPERATOR (USER) RESOLUTION ──
+  const operatorInput = document.getElementById('operator');
+  const operatorNameDisplay = document.getElementById('operatorNameDisplay');
+  const userModal = document.getElementById('userModal');
+  const userModalId = document.getElementById('userModalId');
+  const userModalName = document.getElementById('userModalName');
+  let idAwaitingRegistration = null;
+
+  function tryResolveOperator(){
+    const id = operatorInput.value.trim();
+    if(!id){ pendingOperatorId = null; operatorNameDisplay.value = ''; updateCheckoutEnabled(); return; }
+    const user = userForId(id);
+    if(user){
+      pendingOperatorId = user.ttNumber;
+      operatorNameDisplay.value = user.name;
+      updateCheckoutEnabled();
+    } else {
+      pendingOperatorId = null;
+      operatorNameDisplay.value = '';
+      openUserModal(id);
+    }
+  }
+  function updateCheckoutEnabled(){
+    checkoutBtn.disabled = !(pendingCode && pendingOperatorId);
+  }
+  operatorInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); tryResolveOperator(); }
+  });
+  operatorInput.addEventListener('blur', tryResolveOperator);
+
+  function openUserModal(id){
+    idAwaitingRegistration = id;
+    userModalId.textContent = id;
+    userModalName.value = '';
+    userModal.classList.remove('hidden');
+    userModalName.focus();
+  }
+  document.getElementById('userCancelBtn').addEventListener('click', () => {
+    userModal.classList.add('hidden');
+    idAwaitingRegistration = null;
+    operatorInput.value = '';
+  });
+  document.getElementById('userSaveBtn').addEventListener('click', async () => {
+    const name = userModalName.value.trim();
+    if(!name){ alert('Enter a name.'); return; }
+    try{
+      await fetch(WEBAPP_URL, { method:'POST', body: JSON.stringify({ action:'registerUser', ttNumber: idAwaitingRegistration, name }) });
+      const newUser = { ttNumber: idAwaitingRegistration, name };
+      users.push(newUser);
+      pendingOperatorId = newUser.ttNumber;
+      operatorNameDisplay.value = newUser.name;
+      updateCheckoutEnabled();
+      userModal.classList.add('hidden');
+    }catch(e){ alert('Could not register user — try again.'); }
+  });
+
+  // ── Registration modal (new scanner code) ──
+  const registerModal = document.getElementById('registerModal');
+  const registerCodeEl = document.getElementById('registerCode');
+  const registerLabelInput = document.getElementById('registerLabel');
+
+  function openRegisterModal(code){
+    codeAwaitingRegistration = code;
+    registerCodeEl.textContent = code;
+    registerLabelInput.value = '';
+    registerModal.classList.remove('hidden');
+    registerLabelInput.focus();
+  }
+  document.getElementById('registerCancelBtn').addEventListener('click', () => {
+    registerModal.classList.add('hidden');
+    codeAwaitingRegistration = null;
+  });
+  document.getElementById('registerSaveBtn').addEventListener('click', async () => {
+    const label = registerLabelInput.value.trim();
+    if(!label){ alert('Enter a label.'); return; }
+    try{
+      await fetch(WEBAPP_URL, { method:'POST', body: JSON.stringify({ action:'registerScanner', code: codeAwaitingRegistration, label }) });
+      const newScanner = { code: codeAwaitingRegistration, label };
+      scanners.push(newScanner);
+      registerModal.classList.add('hidden');
+      proceedWithScannedScanner(newScanner);
+    }catch(e){ alert('Could not register scanner — try again.'); }
+  });
+
+  scanInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      handleScannedCode(scanInput.value);
+    }
+  });
+
+  document.getElementById('cancelScanBtn').addEventListener('click', function(){
+    pendingCode = null;
+    pendingOperatorId = null;
+    scannerLabelField.value = '';
+    operatorNameDisplay.value = '';
+    checkoutBtn.disabled = true;
+    form.reset();
+    scanInput.focus();
+  });
+
+  form.addEventListener('submit', async function(e){
+    e.preventDefault();
+    if(!configured){ alert('Backend not configured yet — see README setup steps.'); return; }
+    if(!pendingCode){ alert('Scan a scanner first.'); return; }
+    if(!pendingOperatorId){ alert('Enter and resolve an operator TT#/ID first.'); return; }
+    const usage = document.getElementById('usage').value;
+    // The scanner CODE and operator ID are re-verified against their
+    // registries server-side. Usage is a legitimate per-checkout choice
+    // for these units (they aren't dedicated to one stage), validated to
+    // one of the two allowed values on the server.
+    checkoutBtn.disabled = true;
+    try{
+      const res = await fetch(WEBAPP_URL, { method:'POST', body: JSON.stringify({ action:'checkout', code: pendingCode, operatorId: pendingOperatorId, usage }) });
+      const data = await res.json();
+      if(data.ok === false){ alert(data.error || 'Checkout failed.'); return; }
+      pendingCode = null;
+      pendingOperatorId = null;
+      scannerLabelField.value = '';
+      operatorNameDisplay.value = '';
+      form.reset();
+      await fetchAll();
+      scanInput.focus();
+    }catch(e){ alert('Could not check out scanner — try again.'); }
+    finally{ checkoutBtn.disabled = true; }
+  });
+
+  document.addEventListener('click', async function(e){
+    const closeId = e.target.getAttribute('data-close');
+    const delId = e.target.getAttribute('data-del');
+    if(closeId){
+      e.target.disabled = true;
+      try{ await fetch(WEBAPP_URL, { method:'POST', body: JSON.stringify({ action:'checkin', id: closeId }) }); await fetchAll(); }
+      catch(err){ alert('Could not check in — try again.'); e.target.disabled = false; }
+    }
+    if(delId){
+      if(!confirm('Delete this entry?')) return;
+      try{ await fetch(WEBAPP_URL, { method:'POST', body: JSON.stringify({ action:'delete', id: delId }) }); await fetchAll(); }
+      catch(err){ alert('Could not delete — try again.'); }
+    }
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', fetchAll);
+
+  document.getElementById('exportCsv').addEventListener('click', function(){
+    if(entries.length === 0) return;
+    const header = ['Scanner','Operator ID','Operator Name','Time In','Time Out','Usage'];
+    const lines = [header.join(',')];
+    entries.forEach(en => {
+      lines.push([
+        `"${(en.scannerId||'').replace(/"/g,'""')}"`,
+        `"${(en.operatorId||'').replace(/"/g,'""')}"`,
+        `"${(en.operatorName||'').replace(/"/g,'""')}"`,
+        en.timeIn ? new Date(en.timeIn).toLocaleString('en-ZA') : '',
+        en.timeOut ? new Date(en.timeOut).toLocaleString('en-ZA') : '',
+        usageLabel(en.usage)
+      ].join(','));
+    });
+    const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `cageops-register-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // ── CAMERA SCAN ──
+  cameraBtn.addEventListener('click', function(){
+    cameraModal.classList.remove('hidden');
+    html5QrCode = new Html5Qrcode("cameraReader");
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 220 },
+      function(decodedText){
+        stopCamera();
+        scanInput.value = decodedText;
+        handleScannedCode(decodedText);
+      },
+      function(){ /* ignore per-frame scan errors */ }
+    ).catch(function(err){
+      alert('Could not start camera: ' + err);
+      cameraModal.classList.add('hidden');
+    });
+  });
+  function stopCamera(){
+    if(html5QrCode){
+      html5QrCode.stop().then(() => html5QrCode.clear()).catch(()=>{});
+    }
+    cameraModal.classList.add('hidden');
+  }
+  closeCameraBtn.addEventListener('click', stopCamera);
+
+  // ── SHIFT ROLL CALL ──
+  let rollCallActive = null; // 'start' | 'end' | null
+  let rollCallScanned = new Set();
+  const rollcallPanel = document.getElementById('rollcallPanel');
+  const rcGrid = document.getElementById('rcGrid');
+  const rcTitle = document.getElementById('rcTitle');
+
+  function openRollCall(shiftType){
+    rollCallActive = shiftType;
+    rollCallScanned = new Set();
+    rcTitle.textContent = (shiftType === 'start' ? 'Start of shift' : 'End of shift') + ' — scan every scanner';
+    rollcallPanel.classList.remove('hidden');
+    renderRcGrid();
+    scanInput.focus();
+  }
+  function renderRcGrid(){
+    rcGrid.innerHTML = '';
+    scanners.forEach(s => {
+      const div = document.createElement('div');
+      div.className = 'rc-chip' + (rollCallScanned.has(s.label) ? ' scanned' : '');
+      div.textContent = (rollCallScanned.has(s.label) ? '✓ ' : '') + s.label;
+      rcGrid.appendChild(div);
+    });
+  }
+  function handleRollCallScan(code){
+    const s = scannerForCode(code);
+    if(!s){ alert('Unrecognised code — register it outside roll call first.'); return; }
+    rollCallScanned.add(s.label);
+    renderRcGrid();
+  }
+  document.getElementById('startShiftBtn').addEventListener('click', () => openRollCall('start'));
+  document.getElementById('endShiftBtn').addEventListener('click', () => openRollCall('end'));
+  document.getElementById('rcCancelBtn').addEventListener('click', () => {
+    rollCallActive = null;
+    rollcallPanel.classList.add('hidden');
+  });
+  document.getElementById('rcFinishBtn').addEventListener('click', async () => {
+    const rcId = document.getElementById('rcOperator').value.trim();
+    const rcUser = userForId(rcId);
+    if(!rcUser){ alert('Unrecognised TT#/ID — that person must be a registered user first (scan any unit checkout screen with their ID to register them).'); return; }
+    const scannedLabels = Array.from(rollCallScanned);
+    const missingLabels = scanners.map(s => s.label).filter(l => !rollCallScanned.has(l));
+    if(missingLabels.length > 0 && !confirm(`Missing: ${missingLabels.join(', ')}\n\nSubmit roll call anyway?`)) return;
+    try{
+      await fetch(WEBAPP_URL, { method:'POST', body: JSON.stringify({ action:'rollcall', shiftType: rollCallActive, operatorId: rcUser.ttNumber, scannedLabels, missingLabels }) });
+      alert('Roll call logged.' + (missingLabels.length ? ' Missing: ' + missingLabels.join(', ') : ' All scanners accounted for.'));
+    }catch(e){ alert('Could not log roll call — try again.'); }
+    rollCallActive = null;
+    rollcallPanel.classList.add('hidden');
+    document.getElementById('rcOperator').value = '';
+    document.getElementById('rcOperatorName').textContent = '';
+  });
+  document.getElementById('rcOperator').addEventListener('input', function(){
+    const u = userForId(this.value.trim());
+    document.getElementById('rcOperatorName').textContent = u ? u.name : '';
+  });
+
+  fetchAll();
+  setInterval(fetchAll, 5000);
+})();
+</script>
+</body>
+</html>
